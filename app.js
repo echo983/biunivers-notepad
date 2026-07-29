@@ -256,8 +256,9 @@ async function openHandle(handle, message = "已打开") {
 
 async function acceptLaunchContext({ quietWhenAbsent = false } = {}) {
   let context;
+  const usingResourceSessions = resourceSessionsAvailable;
   try {
-    context = resourceSessionsAvailable
+    context = usingResourceSessions
       ? await claimResourceLaunch()
       : await getLaunchContext();
   } catch (error) {
@@ -276,7 +277,7 @@ async function acceptLaunchContext({ quietWhenAbsent = false } = {}) {
     throw error;
   }
 
-  const handle = resourceSessionsAvailable
+  const handle = usingResourceSessions
     ? normalizeSession(context.resource)
     : normalizeLaunchHandle(context.resource);
   if (dirty && !confirm("当前文档有未保存的更改。放弃更改并打开新文件？")) {
