@@ -16,7 +16,7 @@ window.addEventListener("message", (event) => {
   const request = pending.get(message.requestId);
   if (!request) return;
   pending.delete(message.requestId);
-  clearTimeout(request.timeout);
+  if (request.timeout !== null) clearTimeout(request.timeout);
   if (message.ok) {
     request.resolve(message.result);
   } else {
@@ -28,15 +28,18 @@ window.addEventListener("message", (event) => {
   }
 });
 
-export function resourceRequest(method, params = {}, timeoutMs = 5000) {
+export function resourceRequest(method, params = {}, timeoutMs = null) {
   const requestId = crypto.randomUUID();
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      pending.delete(requestId);
-      const error = new Error("宿主未响应 Resource Session v1");
-      error.code = "RESOURCE_SESSION_UNSUPPORTED";
-      reject(error);
-    }, timeoutMs);
+    const timeout =
+      timeoutMs === null
+        ? null
+        : setTimeout(() => {
+            pending.delete(requestId);
+            const error = new Error("宿主未响应 Resource Session v1");
+            error.code = "RESOURCE_SESSION_UNSUPPORTED";
+            reject(error);
+          }, timeoutMs);
     pending.set(requestId, { resolve, reject, timeout });
     window.parent.postMessage(
       { protocol, requestId, method, params },

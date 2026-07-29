@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "protocol": "biunivers.static-app/1",
   "appId": "io.github.echo983.biunivers-notepad",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "name": "Biunivers Notepad",
   "description": "A Resource Session v1 text editor with Host API v1 fallback.",
   "license": "MIT",
