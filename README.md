@@ -1,4 +1,4 @@
-# Biunivers Notepad
+# BiuniNote
 
 用于验收 Biunivers Resource Session v1、Host API v1 fallback 与 Open Resource v1 的
 纯静态文本与 Markdown 编辑器。
