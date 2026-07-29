@@ -198,9 +198,14 @@ async function acceptLaunchContext({ quietWhenAbsent = false } = {}) {
   try {
     context = await getLaunchContext();
   } catch (error) {
+    // contextAvailable is only a hint. A concurrent startup request may have
+    // consumed the context before the notification is handled.
+    if (error.code === "NO_LAUNCH_CONTEXT") {
+      return;
+    }
     if (
       quietWhenAbsent &&
-      ["NO_LAUNCH_CONTEXT", "OPEN_RESOURCE_UNSUPPORTED"].includes(error.code)
+      error.code === "OPEN_RESOURCE_UNSUPPORTED"
     ) {
       return;
     }
