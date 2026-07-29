@@ -7,6 +7,16 @@ import {
   getLaunchContext,
   onLaunchContextAvailable,
 } from "./open-resource.js";
+import {
+  claimResourceLaunch,
+  detectResourceSessions,
+  onResourceLaunchAvailable,
+  readSession,
+  releaseSession,
+  resourceRequest,
+  trackSession,
+  writeSession,
+} from "./resource-session.js";
 
 const editor = document.querySelector("#editor");
 const filename = document.querySelector("#filename");
@@ -16,6 +26,7 @@ let currentHandle = null;
 let dirty = false;
 let busy = false;
 let launchQueued = false;
+let resourceSessionsAvailable = false;
 
 function setStatus(message, failed = false) {
   status.textContent = message;
@@ -42,6 +53,7 @@ function canWrite(handle) {
 
 function normalizeLaunchHandle(resource) {
   return {
+    transport: "host-api",
     handleId: resource.handleId,
     permissions: resource.permissions,
     metadata: {
@@ -51,13 +63,27 @@ function normalizeLaunchHandle(resource) {
   };
 }
 
+function normalizeSession(session) {
+  trackSession(session);
+  return {
+    ...session,
+    transport: "resource-session",
+    permissions:
+      session.access === "edit" ? ["read", "write"] : ["read"],
+  };
+}
+
 async function release(handle) {
   if (!handle) {
     return;
   }
-  await hostRequest("file.release", { handleId: handle.handleId }).catch(
-    () => {},
-  );
+  if (handle.transport === "resource-session") {
+    await releaseSession(handle);
+  } else {
+    await hostRequest("file.release", { handleId: handle.handleId }).catch(
+      () => {},
+    );
+  }
 }
 
 async function run(action) {
@@ -99,12 +125,23 @@ document.querySelector("#open").addEventListener("click", () => {
     if (dirty && !confirm("放弃尚未保存的更改？")) {
       return;
     }
-    const handle = await hostRequest("file.open", { writable: true });
+    const handle = resourceSessionsAvailable
+      ? normalizeSession(
+          await resourceRequest("resource.open", { access: "edit" }),
+        )
+      : {
+          ...(await hostRequest("file.open", { writable: true })),
+          transport: "host-api",
+        };
     try {
-      const transfer = await hostRequest("file.readTransfer", {
-        handleId: handle.handleId,
-      });
-      const text = await readTransfer(transfer);
+      const text =
+        handle.transport === "resource-session"
+          ? await readSession(handle)
+          : await readTransfer(
+              await hostRequest("file.readTransfer", {
+                handleId: handle.handleId,
+              }),
+            );
       await release(currentHandle);
       setDocument(text, handle);
       setStatus(`已打开 ${handle.metadata.name}`);
@@ -122,13 +159,20 @@ async function saveWithHandle(handle) {
     error.code = "FILE_READ_ONLY";
     throw error;
   }
-  const transfer = await hostRequest("file.writeTransfer", {
-    handleId: handle.handleId,
-  });
-  const result = await writeTransfer(transfer, editor.value);
-  const metadata = await hostRequest("file.getMetadata", {
-    handleId: handle.handleId,
-  });
+  let result;
+  let metadata;
+  if (handle.transport === "resource-session") {
+    result = await writeSession(handle, editor.value);
+    metadata = handle.metadata;
+  } else {
+    const transfer = await hostRequest("file.writeTransfer", {
+      handleId: handle.handleId,
+    });
+    result = await writeTransfer(transfer, editor.value);
+    metadata = await hostRequest("file.getMetadata", {
+      handleId: handle.handleId,
+    });
+  }
   currentHandle = {
     ...handle,
     metadata,
@@ -140,13 +184,26 @@ async function saveWithHandle(handle) {
 
 async function saveAs() {
   const oldHandle = currentHandle;
-  const handle = await hostRequest("file.saveAs", {
-    suggestedName: oldHandle?.metadata?.name || "未命名.txt",
-    mediaType: "text/plain",
-  });
+  const suggestedName = oldHandle?.metadata?.name || "未命名.txt";
+  const handle = resourceSessionsAvailable
+    ? normalizeSession(
+        await resourceRequest("resource.saveAs", { suggestedName }),
+      )
+    : {
+        ...(await hostRequest("file.saveAs", {
+          suggestedName,
+          mediaType: "text/plain",
+        })),
+        transport: "host-api",
+      };
   try {
     await saveWithHandle(handle);
-    if (oldHandle?.handleId !== handle.handleId) {
+    if (
+      oldHandle &&
+      (oldHandle.transport !== handle.transport ||
+        oldHandle.handleId !== handle.handleId ||
+        oldHandle.sessionId !== handle.sessionId)
+    ) {
       await release(oldHandle);
     }
   } catch (error) {
@@ -179,10 +236,14 @@ editor.addEventListener("input", () => {
 
 async function openHandle(handle, message = "已打开") {
   try {
-    const transfer = await hostRequest("file.readTransfer", {
-      handleId: handle.handleId,
-    });
-    const text = await readTransfer(transfer);
+    const text =
+      handle.transport === "resource-session"
+        ? await readSession(handle)
+        : await readTransfer(
+            await hostRequest("file.readTransfer", {
+              handleId: handle.handleId,
+            }),
+          );
     await release(currentHandle);
     setDocument(text, handle);
     setStatus(`${message} ${handle.metadata.name}`);
@@ -196,7 +257,9 @@ async function openHandle(handle, message = "已打开") {
 async function acceptLaunchContext({ quietWhenAbsent = false } = {}) {
   let context;
   try {
-    context = await getLaunchContext();
+    context = resourceSessionsAvailable
+      ? await claimResourceLaunch()
+      : await getLaunchContext();
   } catch (error) {
     // contextAvailable is only a hint. A concurrent startup request may have
     // consumed the context before the notification is handled.
@@ -205,14 +268,17 @@ async function acceptLaunchContext({ quietWhenAbsent = false } = {}) {
     }
     if (
       quietWhenAbsent &&
-      error.code === "OPEN_RESOURCE_UNSUPPORTED"
+      (error.code === "OPEN_RESOURCE_UNSUPPORTED" ||
+        error.code === "RESOURCE_SESSION_UNSUPPORTED")
     ) {
       return;
     }
     throw error;
   }
 
-  const handle = normalizeLaunchHandle(context.resource);
+  const handle = resourceSessionsAvailable
+    ? normalizeSession(context.resource)
+    : normalizeLaunchHandle(context.resource);
   if (dirty && !confirm("当前文档有未保存的更改。放弃更改并打开新文件？")) {
     await release(handle);
     setStatus("已取消打开新文件");
@@ -228,11 +294,30 @@ window.addEventListener("beforeunload", (event) => {
 });
 
 setDocument("");
-onLaunchContextAvailable(() => {
+onResourceLaunchAvailable(() => {
+  if (!resourceSessionsAvailable) return;
   if (busy) {
     launchQueued = true;
     return;
   }
   void run(() => acceptLaunchContext());
 });
-void run(() => acceptLaunchContext({ quietWhenAbsent: true }));
+onLaunchContextAvailable(() => {
+  if (resourceSessionsAvailable) return;
+  if (busy) {
+    launchQueued = true;
+    return;
+  }
+  void run(() => acceptLaunchContext());
+});
+void detectResourceSessions()
+  .then(() => {
+    resourceSessionsAvailable = true;
+    setStatus("就绪 · Resource Session v1");
+  })
+  .catch(() => {
+    resourceSessionsAvailable = false;
+  })
+  .finally(() => {
+    void run(() => acceptLaunchContext({ quietWhenAbsent: true }));
+  });
