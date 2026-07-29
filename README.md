@@ -1,6 +1,7 @@
 # Biunivers Notepad
 
-用于验收 Biunivers Host API v1 与 Open Resource v1 的最小纯静态记事本。
+用于验收 Biunivers Resource Session v1、Host API v1 fallback 与 Open Resource v1 的
+最小纯静态记事本。
 
 发布为独立仓库时，直接把本目录内容放到仓库根目录；所需协议原文已经包含。应用不需要
 构建、依赖安装、服务端或 secret。
@@ -16,3 +17,6 @@
 - 从文件管理器双击 `.txt` 或 `.md` 后自动读取；
 - 根据宿主实际授予的权限进入可写或只读模式；
 - 已有未保存内容时确认是否切换到新文件。
+- 在支持新协议的宿主优先使用可续租 Resource Session；
+- 每 60 秒批量续租当前文件，会话切换和新建时主动释放；
+- 在旧宿主上自动回退到 Host API v1。
