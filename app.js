@@ -17,8 +17,13 @@ import {
   trackSession,
   writeSession,
 } from "./resource-session.js";
+import { renderMarkdown } from "./markdown.mjs";
 
 const editor = document.querySelector("#editor");
+const preview = document.querySelector("#preview");
+const viewMode = document.querySelector("#view-mode");
+const editMode = document.querySelector("#edit-mode");
+const previewMode = document.querySelector("#preview-mode");
 const filename = document.querySelector("#filename");
 const status = document.querySelector("#status");
 const count = document.querySelector("#count");
@@ -27,6 +32,7 @@ let dirty = false;
 let busy = false;
 let launchQueued = false;
 let resourceSessionsAvailable = false;
+let markdownDocument = false;
 
 function setStatus(message, failed = false) {
   status.textContent = message;
@@ -45,6 +51,31 @@ function setDocument(text, handle = null) {
   updateTitle(handle?.metadata?.name);
   count.textContent = `${text.length} 字符`;
   document.querySelector("#save").disabled = editor.readOnly;
+  markdownDocument = isMarkdown(handle);
+  viewMode.hidden = !markdownDocument;
+  setView(markdownDocument ? "preview" : "edit");
+}
+
+function isMarkdown(handle) {
+  const name = handle?.metadata?.name?.toLowerCase() || "";
+  return (
+    name.endsWith(".md") ||
+    name.endsWith(".markdown") ||
+    handle?.metadata?.mediaType === "text/markdown"
+  );
+}
+
+function setView(mode) {
+  const showingPreview = markdownDocument && mode === "preview";
+  editor.hidden = showingPreview;
+  preview.hidden = !showingPreview;
+  editMode.setAttribute("aria-pressed", String(!showingPreview));
+  previewMode.setAttribute("aria-pressed", String(showingPreview));
+  if (showingPreview) {
+    renderMarkdown(preview, editor.value);
+  } else if (markdownDocument) {
+    editor.focus();
+  }
 }
 
 function canWrite(handle) {
@@ -226,6 +257,9 @@ document.querySelector("#save").addEventListener("click", () => {
 document.querySelector("#save-as").addEventListener("click", () => {
   void run(saveAs);
 });
+
+editMode.addEventListener("click", () => setView("edit"));
+previewMode.addEventListener("click", () => setView("preview"));
 
 editor.addEventListener("input", () => {
   dirty = true;
