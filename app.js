@@ -3,6 +3,10 @@ import {
   readTransfer,
   writeTransfer,
 } from "./host-api.js";
+import {
+  getLaunchContext,
+  onLaunchContextAvailable,
+} from "./open-resource.js";
 
 const editor = document.querySelector("#editor");
 const filename = document.querySelector("#filename");
@@ -11,6 +15,7 @@ const count = document.querySelector("#count");
 let currentHandle = null;
 let dirty = false;
 let busy = false;
+let launchQueued = false;
 
 function setStatus(message, failed = false) {
   status.textContent = message;
@@ -25,8 +30,25 @@ function setDocument(text, handle = null) {
   editor.value = text;
   currentHandle = handle;
   dirty = false;
+  editor.readOnly = Boolean(handle && !canWrite(handle));
   updateTitle(handle?.metadata?.name);
   count.textContent = `${text.length} 字符`;
+  document.querySelector("#save").disabled = editor.readOnly;
+}
+
+function canWrite(handle) {
+  return handle?.permissions?.includes("write") !== false;
+}
+
+function normalizeLaunchHandle(resource) {
+  return {
+    handleId: resource.handleId,
+    permissions: resource.permissions,
+    metadata: {
+      name: resource.name,
+      mediaType: resource.mediaType,
+    },
+  };
 }
 
 async function release(handle) {
@@ -53,6 +75,10 @@ async function run(action) {
   } finally {
     busy = false;
     document.body.dataset.busy = "false";
+    if (launchQueued) {
+      launchQueued = false;
+      queueMicrotask(() => void run(() => acceptLaunchContext()));
+    }
   }
 }
 
@@ -91,6 +117,11 @@ document.querySelector("#open").addEventListener("click", () => {
 });
 
 async function saveWithHandle(handle) {
+  if (!canWrite(handle)) {
+    const error = new Error("当前文件为只读，请使用另存为");
+    error.code = "FILE_READ_ONLY";
+    throw error;
+  }
   const transfer = await hostRequest("file.writeTransfer", {
     handleId: handle.handleId,
   });
@@ -146,6 +177,45 @@ editor.addEventListener("input", () => {
   setStatus("有未保存的更改");
 });
 
+async function openHandle(handle, message = "已打开") {
+  try {
+    const transfer = await hostRequest("file.readTransfer", {
+      handleId: handle.handleId,
+    });
+    const text = await readTransfer(transfer);
+    await release(currentHandle);
+    setDocument(text, handle);
+    setStatus(`${message} ${handle.metadata.name}`);
+    editor.focus();
+  } catch (error) {
+    await release(handle);
+    throw error;
+  }
+}
+
+async function acceptLaunchContext({ quietWhenAbsent = false } = {}) {
+  let context;
+  try {
+    context = await getLaunchContext();
+  } catch (error) {
+    if (
+      quietWhenAbsent &&
+      ["NO_LAUNCH_CONTEXT", "OPEN_RESOURCE_UNSUPPORTED"].includes(error.code)
+    ) {
+      return;
+    }
+    throw error;
+  }
+
+  const handle = normalizeLaunchHandle(context.resource);
+  if (dirty && !confirm("当前文档有未保存的更改。放弃更改并打开新文件？")) {
+    await release(handle);
+    setStatus("已取消打开新文件");
+    return;
+  }
+  await openHandle(handle, canWrite(handle) ? "已打开" : "已只读打开");
+}
+
 window.addEventListener("beforeunload", (event) => {
   if (dirty) {
     event.preventDefault();
@@ -153,3 +223,11 @@ window.addEventListener("beforeunload", (event) => {
 });
 
 setDocument("");
+onLaunchContextAvailable(() => {
+  if (busy) {
+    launchQueued = true;
+    return;
+  }
+  void run(() => acceptLaunchContext());
+});
+void run(() => acceptLaunchContext({ quietWhenAbsent: true }));
