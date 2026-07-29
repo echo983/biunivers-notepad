@@ -1,7 +1,7 @@
-# Biunivers Notepad
+# BiuniNote
 
 用于验收 Biunivers Resource Session v1、Host API v1 fallback 与 Open Resource v1 的
-最小纯静态记事本。
+纯静态文本与 Markdown 编辑器。
 
 发布为独立仓库时，直接把本目录内容放到仓库根目录；所需协议原文已经包含。应用不需要
 构建、依赖安装、服务端或 secret。
@@ -20,3 +20,6 @@
 - 在支持新协议的宿主优先使用可续租 Resource Session；
 - 每 60 秒批量续租当前文件，会话切换和新建时主动释放；
 - 在旧宿主上自动回退到 Host API v1。
+- `.md` 和 `.markdown` 文件默认安全渲染预览，并可切回原文编辑；
+- 支持标题、段落、列表、引用、代码块、分隔线、强调、行内代码和链接；
+- 不执行 Markdown 中的 HTML 或脚本，危险链接协议不会生成可点击链接。

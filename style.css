@@ -33,6 +33,29 @@ footer {
   background: #fff;
 }
 
+.view-mode {
+  display: flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 7px;
+  background: #e9edf3;
+}
+
+.view-mode[hidden] {
+  display: none;
+}
+
+.view-mode button {
+  padding: 4px 9px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.view-mode button[aria-pressed="true"] {
+  border-color: #bac6d6;
+  background: #fff;
+}
+
 footer {
   color: #667085;
   border-top: 1px solid #dce1e8;
@@ -75,6 +98,69 @@ body[data-busy="true"] button {
   outline: 0;
   background: #fbfcfe;
   font: 15px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+#preview {
+  width: 100%;
+  height: 100%;
+  padding: 20px 28px 40px;
+  overflow: auto;
+  color: #202631;
+  background: #fbfcfe;
+  font: 15px/1.7 system-ui, sans-serif;
+}
+
+#preview > :first-child {
+  margin-top: 0;
+}
+
+#preview h1,
+#preview h2 {
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid #dce1e8;
+}
+
+#preview h1 {
+  font-size: 2em;
+}
+
+#preview h2 {
+  font-size: 1.5em;
+}
+
+#preview h3 {
+  font-size: 1.25em;
+}
+
+#preview pre,
+#preview code {
+  border-radius: 4px;
+  background: #eef1f5;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+#preview code {
+  padding: 0.12em 0.35em;
+}
+
+#preview pre {
+  padding: 14px;
+  overflow: auto;
+}
+
+#preview pre code {
+  padding: 0;
+}
+
+#preview blockquote {
+  margin-left: 0;
+  padding-left: 14px;
+  color: #596579;
+  border-left: 4px solid #c7d1df;
+}
+
+#preview a {
+  color: #1769aa;
 }
 
 #status[data-failed="true"] {

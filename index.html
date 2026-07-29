@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Biunivers Notepad</title>
+    <title>BiuniNote</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
@@ -15,6 +15,12 @@
           <button id="save" type="button">保存</button>
           <button id="save-as" type="button">另存为</button>
         </div>
+        <div id="view-mode" class="view-mode" hidden>
+          <button id="edit-mode" type="button" aria-pressed="true">编辑</button>
+          <button id="preview-mode" type="button" aria-pressed="false">
+            预览
+          </button>
+        </div>
         <strong id="filename">未命名.txt</strong>
       </header>
       <textarea
@@ -23,6 +29,7 @@
         spellcheck="true"
         placeholder="在这里输入文本……"
       ></textarea>
+      <article id="preview" aria-label="Markdown 预览" hidden></article>
       <footer>
         <span id="status" role="status">就绪</span>
         <span id="count">0 字符</span>
